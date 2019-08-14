@@ -6,12 +6,11 @@ import java.awt.event.ActionListener;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 
 import com.softexpert.db.analysis.control.AbstractConnectionManager;
-import com.softexpert.db.analysis.op.InsertTest;
-import com.softexpert.db.analysis.op.LoadTest;
+import com.softexpert.db.analysis.op.Operations;
 
-import net.miginfocom.layout.CC;
 import net.miginfocom.layout.LC;
 import net.miginfocom.swing.MigLayout;
 
@@ -31,50 +30,51 @@ public class RunApp extends JFrame {
 		
 		setTitle("Database tests");
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
-		setLayout(new MigLayout(new LC().insetsAll("12")));
+		setLayout(new MigLayout(new LC().insetsAll("12").wrapAfter(3)));
 		
-		ActionListener action = new ExecuteTestAction();
-		JButton btnPostgre = new JButton("PostgreSQL Insert");
-		JButton btnOracle = new JButton("Oracle Insert");
-		JButton btnSQL = new JButton("SQLServer Insert");
-		JButton btnPostgreLoad = new JButton("PostgreSQL Load");
-		JButton btnOracleLoad = new JButton("Oracle Load");
-		JButton btnSQLLoad = new JButton("SQLServer Load");
-		btnPostgre.addActionListener(action);
-		btnOracle.addActionListener(action);
-		btnSQL.addActionListener(action);
-		btnPostgreLoad.addActionListener(action);
-		btnOracleLoad.addActionListener(action);
-		btnSQLLoad.addActionListener(action);
-		add(btnPostgre);
-		add(btnOracle);
-		add(btnSQL, new CC().wrap());
-		add(btnPostgreLoad);
-		add(btnOracleLoad);
-		add(btnSQLLoad, new CC().wrap());
+		createButtons();
 		
 		pack();
 		setMinimumSize(getSize());
 		setLocationRelativeTo(null);
 	}
 	
+	private void createButtons() {
+	    ActionListener action = new ExecuteTestAction();
+	    for (Operations operation : Operations.values()) {
+	        add(createButton("PostgreSQL", operation, action));
+	        add(createButton("Oracle", operation, action));
+	        add(createButton("SQLServer", operation, action));
+	    }
+	}
+
+	private JButton createButton(String database, Operations operation, ActionListener action) {
+	    JButton button = new JButton(database + " - " + operation.getOperationName());
+	    button.setName(operation.getRunnableClass().getName());
+	    button.addActionListener(action);
+	    return button;
+	}
+
 	private class ExecuteTestAction implements ActionListener {
 
-		@Override
-		public void actionPerformed(ActionEvent e) {
-			JButton button = (JButton) e.getSource();
-			String op = button.getText().substring(button.getText().indexOf(" ")+1);
-			DatabaseRunnable runnable = null;
-			if (op.equals("Load")) {
-				runnable = new LoadTest();
-			}else if (op.equals("Insert")) {
-				runnable = new InsertTest();
-			}
-			
-			if (op != null) {
-				executeOperation(button.getText().substring(0, button.getText().indexOf(" ")), runnable);
-			}
-		}
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+	        try {
+	            JButton button = (JButton) e.getSource();
+	            String database = button.getText().substring(0, button.getText().indexOf(' '));
+	            DatabaseRunnable runnable = (DatabaseRunnable) Class.forName(button.getName()).newInstance();
+	            
+	            new SwingWorker<Void, Void>() {
+                    @Override
+                    protected Void doInBackground() throws Exception {
+                        executeOperation(database, runnable);
+                        return null;
+                    }
+                }.execute();
+	        } catch (Exception err) {
+	            err.printStackTrace();
+	        }
+	    }
 	}
 	
 	public void executeOperation(String dbName, DatabaseRunnable runnable) {
